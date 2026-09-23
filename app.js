@@ -14,7 +14,7 @@ const phoneLayout=matchMedia('(max-width: 720px), (max-width: 950px) and (max-he
 let data, nodeMap, moduleMap, moduleId='src/Core/Zaux.v', selectedId, mode=phoneLayout.matches?'declarations':'atlas', page=0, zoom=1, statusFilter=null, candidateIndex=0;
 let visibleNodes=[], viewWidth=980, viewHeight=400, renderToken=0;
 let atlasPositions=new Map(), cardPositions=new Map(), edgeMode='selected';
-// Default view: definitions are roots. Proven, checked theorems fold into what they depend on.
+// Default view: definitions are roots. Theorems proven in Lean and spot-checked by Claude fold into what they use.
 let scope='roots', rootEdgeList=[];
 const pageSize=36, sourceCache=new Map();
 const shown = n => scope==='all' || !n.hideInRoots;
@@ -23,10 +23,12 @@ const moduleNodes = m => m.nodes.map(id=>nodeMap.get(id)).filter(shown);
 const activeEdges = () => scope==='roots' ? rootEdgeList : data.edges;
 const foldCount = n => scope==='roots' ? (n.folded?.length||0) : 0;
 function roleText(n){
-  if(n.role!=='theorem')return 'definition';
+  if(n.role!=='theorem')return n.roleBasis==='data term'?'definition (a data-returning theorem)':'definition';
   if(!n.proven)return 'unproved theorem';
-  return n.checked?'proven, checked theorem':'proven theorem, not yet checked';
+  if(n.spotChecked)return 'proven, spot-checked theorem';
+  return n.checked?'proven theorem, reviewed by the port but not yet spot-checked by Claude':'proven theorem, not yet checked';
 }
+const describe=(id,text)=>{$(id).textContent=text;$(id).title=text;};
 
 async function load(){
   const response=await fetch('data.json');
@@ -39,10 +41,10 @@ async function load(){
   $('module-total').textContent=data.modules.length;
   $('source-pins').textContent=data.flocqPin.slice(0,8)+' / '+data.leanCommit.slice(0,8);
   const r=data.roots;
-  $('about-stats').innerHTML=`<div><strong>${data.modules.length}</strong><span>source modules</span></div><div><strong>${data.nodes.length.toLocaleString()}</strong><span>declarations</span></div><div><strong>${data.edges.length.toLocaleString()}</strong><span>reference edges</span></div><div><strong>${r.roles.definition.toLocaleString()}</strong><span>definitions</span></div><div><strong>${r.roles.theorem.toLocaleString()}</strong><span>theorems</span></div><div><strong>${r.hidden}</strong><span>folded in roots view</span></div>`;
+  $('about-stats').innerHTML=`<div><strong>${data.modules.length}</strong><span>source modules</span></div><div><strong>${data.nodes.length.toLocaleString()}</strong><span>declarations</span></div><div><strong>${data.edges.length.toLocaleString()}</strong><span>reference edges</span></div><div><strong>${r.roles.definition.toLocaleString()}</strong><span>definitions</span></div><div><strong>${r.roles.theorem.toLocaleString()}</strong><span>theorems</span></div><div><strong>${r.hidden}</strong><span>folded in roots view</span></div><div><strong>${r.unprovedTheorems}</strong><span>unproved theorems</span></div>`;
   $('edge-provenance').textContent=data.dpdCoverage?`Solid lines come from dpdgraph, run on the same pinned Flocq source with Rocq 9.1. ${data.dpdCoverage.mapped.toLocaleString()} of ${data.dpdCoverage.nodes.toLocaleString()} dependency-graph objects map to source declarations; the rest are generated or ambiguous. Arrows point from dependency to consumer. Dashed lines show source order.`:'Solid lines are approximate .glob references; dashed lines show source order.';
   const mapped=data.openDebts.filter(d=>d.source).length;
-  $('about-pins').innerHTML=`Flocq <code>${esc(data.flocqPin.slice(0,12))}</code> · Lean snapshot <code>${esc(data.leanCommit.slice(0,12))}</code>. Source links point to those revisions. Checked evidence comes from the port’s review queue (${data.review.queueChecked} entries), its review ledger (${data.review.ledgerEntries}) and Claude spot checks (${data.review.spotChecks}). The port’s proof-debt manifest lists ${data.openDebts.length} open obligation${data.openDebts.length===1?'':'s'}; ${mapped} ${mapped===1?'is':'are'} shown in red on the Flocq law${mapped===1?'':'s'} ${mapped===1?'it refines':'they refine'}.`;
+  $('about-pins').innerHTML=`Flocq <code>${esc(data.flocqPin.slice(0,12))}</code> · Lean snapshot <code>${esc(data.leanCommit.slice(0,12))}</code>. Source links point to those revisions. Green (checked) evidence comes from the port’s review queue (${data.review.queueChecked} entries), its review ledger (${data.review.ledgerEntries}) and Claude spot checks (${data.review.spotChecks}); only Claude-spot-checked theorems fold in the roots view. The port’s proof-debt manifest lists ${data.openDebts.length} open obligation${data.openDebts.length===1?'':'s'}; ${mapped} ${mapped===1?'is':'are'} shown in red on the Flocq law${mapped===1?'':'s'} ${mapped===1?'it refines':'they refine'}.`;
   renderNav();
   const hash=decodeURIComponent(location.hash.slice(1));
   const showcase=data.nodes.filter(n=>!n.hideInRoots).reduce((best,n)=>(n.folded?.length||0)>(best?.folded?.length||0)?n:best,null);
@@ -76,10 +78,9 @@ function renderLegend(){
   const pool=data.nodes.filter(shown);
   const counts=Object.fromEntries(Object.keys(labels).map(s=>[s,pool.filter(n=>n.status===s).length]));
   $('legend').innerHTML=Object.keys(labels).filter(s=>counts[s]||s===statusFilter).map(s=>`<button class="legend-button ${s===statusFilter?'chosen':''}" data-status="${s}" aria-describedby="guide-${s}" aria-label="Filter to ${labels[s].toLowerCase()}, ${counts[s]} declarations"><span class="legend-label"><i class="dot ${s}"></i>${labels[s]} <span>${counts[s]}</span></span><span class="legend-description">${statusGuide[s].short}</span><span class="legend-tooltip" id="guide-${s}" role="tooltip">${statusGuide[s].detail}</span></button>`).join('');
-  const r=data.roots;
   $('legend-caveat').innerHTML=scope==='roots'
-    ?`<strong>Definitions (roots):</strong> every definition, plus every theorem not yet both proven in Lean and checked against Flocq. The ${r.hidden} proven, checked theorems are folded into the declarations they depend on (<b class="badge-key">+n</b> badges); a <span class="unproved-key">dashed red outline</span> marks the ${r.unprovedTheorems} theorems with no proven Lean counterpart. Click a color to filter.`
-    :'Colors describe this snapshot’s review status, not correctness certificates. Click a color to filter.';
+    ?`<span class="long">Theorems proven in Lean and spot-checked by Claude fold into what they use (<b class="badge-key">+n</b>). Click a color to filter.</span><span class="short">Proven, spot-checked theorems fold into <b class="badge-key">+n</b> badges.</span>`
+    :'<span class="long">Colors are review status, not correctness certificates. Click a color to filter.</span><span class="short">Colors are review status, not proofs.</span>';
   $('bridge-key').hidden=scope!=='roots';
 }
 
@@ -126,14 +127,14 @@ function renderAtlas(){
     const p=atlasPositions.get(n.id);if(!p)continue;
     const dim=statusFilter&&n.status!==statusFilter,badge=foldCount(n),limit=badge?(badge>99?11:13):17;
     const classes=[n.status,'role-'+n.role,unproved(n)?'unproved':'',n.id===selectedId?'selected':'',neighbors.has(n.id)?'neighbor':'',hosts.has(n.id)?'host':'',dim?'dimmed':''].filter(Boolean).join(' ');
-    html+=`<g class="atlas-node ${classes}" role="button" tabindex="${dim?-1:0}" data-node="${esc(n.id)}" aria-label="${esc(n.name)}, ${roleText(n)}, ${labels[n.status]}${badge?`, ${badge} checked theorems folded here`:''}"><title>${esc(moduleMap.get(n.module).name)} / ${esc(n.name)} · ${roleText(n)} · ${labels[n.status]} · L${n.line}${badge?` · +${badge} proven, checked theorems folded here`:''}</title><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${n.role==='theorem'?10:2}" fill="${colors[n.status]}"/><text x="${p.x+5}" y="${p.y+14}">${esc(n.name.length>limit?n.name.slice(0,limit-1)+'…':n.name)}</text>`;
+    html+=`<g class="atlas-node ${classes}" role="button" tabindex="${dim?-1:0}" data-node="${esc(n.id)}" aria-label="${esc(n.name)}, ${roleText(n)}, ${labels[n.status]}${badge?`, ${badge} spot-checked theorems folded here`:''}"><title>${esc(moduleMap.get(n.module).name)} / ${esc(n.name)} · ${roleText(n)} · ${labels[n.status]} · L${n.line}${badge?` · +${badge} proven, spot-checked theorems folded here`:''}</title><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${n.role==='theorem'?10:2}" fill="${colors[n.status]}"/><text x="${p.x+5}" y="${p.y+14}">${esc(n.name.length>limit?n.name.slice(0,limit-1)+'…':n.name)}</text>`;
     if(badge){const w=badge>99?24:badge>9?19:15;html+=`<g class="fold-badge"><rect x="${p.x+p.w-w-3}" y="${p.y+4}" width="${w}" height="13" rx="6.5"/><text x="${p.x+p.w-3-w/2}" y="${p.y+13.5}" text-anchor="middle">+${badge}</text></g>`;}
     html+='</g>';
   }
   const total=[...atlasPositions.keys()].length;
   viewWidth=columns*(cardWidth+gap)+30;viewHeight=top;
-  $('module-rank').textContent='ALL';$('module-name').textContent=scope==='roots'?'The whole Flocq library · definitions as roots':'The whole Flocq library';
-  $('module-description').textContent=`${total.toLocaleString()} declarations${scope==='roots'?` shown · ${data.roots.hidden} proven, checked theorems folded`:''} · ${edges.length.toLocaleString()} dependencies · ${data.modules.length} modules in coqdep order`;
+  $('module-rank').textContent='ALL';$('module-name').textContent='The whole Flocq library';
+  describe('module-description',`${total.toLocaleString()} ${scope==='roots'?`shown · ${data.roots.hidden} folded`:'declarations'} · ${edges.length.toLocaleString()} dependencies · ${data.modules.length} modules in coqdep order`);
   $('graph-caption').textContent=selected&&!shown(selected)?`${selected.name} is folded into ${selected.foldedInto.length?selected.foldedInto.map(id=>nodeMap.get(id).name).join(', '):'no visible declaration (see its module)'} · Locate to zoom there`:'Scroll to explore · Ctrl/⌘ + wheel to zoom · Locate to read a node';
   $('page-label').textContent='All '+total.toLocaleString();
   $('page-prev').disabled=true;$('page-next').disabled=true;
@@ -145,7 +146,7 @@ function renderShelf(m,top){
   if(!hidden.length)return {html:'',height:0};
   const phone=phoneLayout.matches,columns=phone?1:3,width=phone?332:278,step=phone?340:315,left=phone?14:35,chip=phone?40:26,row=phone?48:34;
   const unhosted=hidden.filter(n=>!n.foldedInto.length).length;
-  let html=`<text class="fold-shelf-title" x="${left}" y="${top+18}">Folded here · ${hidden.length} proven, checked theorem${hidden.length===1?'':'s'}</text><text class="fold-shelf-note" x="${left}" y="${top+36}">${phone?'Hidden in the roots view.':'Hidden in the roots view; each also appears as a +n badge on what it depends on.'}${unhosted?` ${unhosted} depend on no visible declaration.`:''}</text>`;
+  let html=`<text class="fold-shelf-title" x="${left}" y="${top+18}">Folded here · ${hidden.length} proven, spot-checked theorem${hidden.length===1?'':'s'}</text><text class="fold-shelf-note" x="${left}" y="${top+36}">${phone?'Hidden in the roots view.':'Hidden in the roots view; each also appears as a +n badge on what it depends on.'}${unhosted?` ${unhosted} depend on no visible declaration.`:''}</text>`;
   hidden.forEach((n,i)=>{
     const x=left+(i%columns)*step,y=top+50+Math.floor(i/columns)*row,label=n.name.length>34?n.name.slice(0,33)+'…':n.name;
     cardPositions.set(n.id,{x,y,w:width,h:chip});
@@ -159,7 +160,7 @@ function renderGraph(){
   $('module-rank').textContent=mode==='modules'?String(data.modules.length):String(m.rank+1).padStart(2,'0');
   $('module-name').textContent=mode==='modules'?'The Flocq dependency map':m.name.replaceAll('/',' / ');
   const listed=moduleNodes(m);
-  $('module-description').textContent=mode==='modules'?'Imports first. Then work down each file.':`${listed.length} declarations${scope==='roots'&&m.folded?` shown · ${m.folded} proven, checked theorems folded`:''} · source order · ${m.dependencies.length} direct module imports`;
+  describe('module-description',mode==='modules'?'Imports first. Then work down each file.':`${listed.length} ${scope==='roots'?`shown${m.folded?` · ${m.folded} folded`:''}`:'declarations'} · source order · ${m.dependencies.length} direct module imports`);
   $('declarations-view').classList.toggle('active',mode==='declarations');$('modules-view').classList.toggle('active',mode==='modules');
   $('atlas-view').classList.toggle('active',mode==='atlas');
   $('page-prev').hidden=mode!=='declarations';$('page-next').hidden=mode!=='declarations';
@@ -201,11 +202,11 @@ function renderGraph(){
     visibleNodes.forEach(n=>{
       const p=positions.get(n.id),badge=foldCount(n),max=badge?20:30,title=n.name.length>max?n.name.slice(0,max-2)+'…':n.name;
       const classes=[n.status,'role-'+n.role,unproved(n)?'unproved':'',n.id===selectedId?'selected':'',hosts.has(n.id)?'host':''].filter(Boolean).join(' ');
-      html+=`<g class="node ${classes}" role="button" tabindex="0" data-node="${esc(n.id)}" aria-label="${esc(n.name)}, ${roleText(n)}, ${labels[n.status]}${badge?`, ${badge} checked theorems folded here`:''}"><title>${esc(n.name)} · ${roleText(n)} · ${labels[n.status]} · line ${n.line}${badge?` · +${badge} proven, checked theorems folded here`:''}</title><rect class="node-box" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${n.role==='theorem'?18:4}"/>`;
+      html+=`<g class="node ${classes}" role="button" tabindex="0" data-node="${esc(n.id)}" aria-label="${esc(n.name)}, ${roleText(n)}, ${labels[n.status]}${badge?`, ${badge} spot-checked theorems folded here`:''}"><title>${esc(n.name)} · ${roleText(n)} · ${labels[n.status]} · line ${n.line}${badge?` · +${badge} proven, spot-checked theorems folded here`:''}</title><rect class="node-box" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${n.role==='theorem'?18:4}"/>`;
       if(n.role==='definition')html+=`<rect class="role-bar" x="${p.x}" y="${p.y+9}" width="3.5" height="${p.h-18}" rx="1.5"/>`;
-      html+=`<circle cx="${p.x+15}" cy="${p.y+21}" r="3.8" fill="${colors[n.status]}" stroke="${n.status==='unaddressed'?'#a7b6cb':'none'}"/><text x="${p.x+28}" y="${p.y+25}" class="node-title">${esc(title)}</text><text x="${p.x+15}" y="${p.y+47}" class="node-subtitle">${esc(kinds[n.kind]||n.kind)}${n.roleBasis?' (proof)':''} · L${n.line}</text>`;
+      html+=`<circle cx="${p.x+15}" cy="${p.y+21}" r="3.8" fill="${colors[n.status]}" stroke="${n.status==='unaddressed'?'#a7b6cb':'none'}"/><text x="${p.x+28}" y="${p.y+25}" class="node-title">${esc(title)}</text><text x="${p.x+15}" y="${p.y+47}" class="node-subtitle">${esc(kinds[n.kind]||n.kind)}${n.roleBasis==='proof term'?' (proof)':n.roleBasis==='data term'?' (data)':''} · L${n.line}</text>`;
       if(unproved(n))html+=`<text x="${p.x+p.w-46}" y="${p.y+47}" class="unproved-tag" text-anchor="end">UNPROVED</text>`;
-      if(badge){const label=`+${badge} checked`,w=label.length*6.2+14;html+=`<g class="card-badge"><rect x="${p.x+p.w-10-w}" y="${p.y+12}" width="${w}" height="17" rx="8.5"/><text x="${p.x+p.w-10-w/2}" y="${p.y+24.5}" text-anchor="middle">${label}</text></g>`;}
+      if(badge){const label=`+${badge} folded`,w=label.length*6.2+14;html+=`<g class="card-badge"><rect x="${p.x+p.w-10-w}" y="${p.y+12}" width="${w}" height="17" rx="8.5"/><text x="${p.x+p.w-10-w/2}" y="${p.y+24.5}" text-anchor="middle">${label}</text></g>`;}
       html+=`<text x="${p.x+p.w-36}" y="${p.y+47}" class="node-number">${String(n.index+1).padStart(3,'0')}</text></g>`;
     });
     if(!visibleNodes.length&&!withShelf)html+='<text x="35" y="60" class="empty-graph">No declarations with this status in this module.</text>';
@@ -292,22 +293,25 @@ function codeHtml(text,start,end){
   return html;
 }
 function stepIds(n){return moduleMap.get(n.module).nodes.filter(id=>id===n.id||shown(nodeMap.get(id)));}
+// Evidence behind green and behind folding, one flag per source.
+const evidenceLabels={'Claude spot check':'Claude spot check','FloatSpec review queue':'port review queue','FloatSpec review ledger':'port review ledger'};
 function flags(n){
   let html='';
   if(n.role==='theorem')html+=n.proven?'<span class="flag ok">proven</span>':'<span class="flag bad">unproved</span>';
-  if(n.checked)html+='<span class="flag ok">checked</span>';
+  for(const by of new Set((n.checks||[]).map(c=>c.by)))html+=`<span class="flag ${by==='Claude spot check'?'ok':'review'}" title="Checked against pinned Flocq by ${esc(evidenceLabels[by]||by)}">${esc(evidenceLabels[by]||by)}</span>`;
   if(n.hideInRoots)html+='<span class="flag fold">folded in roots view</span>';
+  else if(n.role==='theorem'&&n.proven&&n.checked&&!n.spotChecked)html+='<span class="flag">awaiting Claude spot check</span>';
   return html;
 }
 async function renderInspector(){
   const n=nodeMap.get(selectedId),token=++renderToken;
   if(!n)return;
   $('selected-name').textContent=n.name;
-  $('selected-kind').innerHTML=esc(kinds[n.kind]||n.kind)+(n.roleBasis?' <span class="kind-note">(a proof, counted as a theorem)</span>':'')+flags(n);
+  $('selected-kind').innerHTML=esc(kinds[n.kind]||n.kind)+(n.roleBasis==='proof term'?' <span class="kind-note">(a proof, counted as a theorem)</span>':n.roleBasis==='data term'?' <span class="kind-note">(returns data, counted as a definition)</span>':'')+flags(n);
   $('selected-status').className='status-badge '+n.status;$('selected-status').textContent=labels[n.status];
   let note=n.note;
   if(n.hideInRoots)note+=n.foldedInto.length?` In Definitions (roots) this theorem is folded into ${n.foldedInto.map(id=>nodeMap.get(id).name).join(', ')}.`:' In Definitions (roots) it depends on no other visible Flocq declaration, so it is listed on its module’s folded shelf.';
-  else if(n.folded?.length)note+=` ${n.folded.length} proven, checked theorem${n.folded.length===1?' is':'s are'} folded into this declaration in the roots view.`;
+  else if(n.folded?.length)note+=` ${n.folded.length} proven, spot-checked theorem${n.folded.length===1?' is':'s are'} folded into this declaration in the roots view.`;
   $('review-note').textContent=note;
   $('coq-location').textContent=moduleMap.get(n.module).name+'.v:'+n.line;
   $('coq-link').href=`https://gitlab.inria.fr/flocq/flocq/-/blob/${data.flocqPin}/${n.module}#L${n.line}`;
@@ -335,7 +339,7 @@ function renderRelations(n){
   const via=e=>e.bridge?'Through folded '+e.via.map(id=>nodeMap.get(id).name).join(', '):'';
   const dependencies=edges.filter(e=>e.to===n.id),consumers=edges.filter(e=>e.from===n.id);
   let html='';
-  if(n.folded?.length)html+=`<span class="relation-label">FOLDED HERE (${n.folded.length} CHECKED THEOREM${n.folded.length===1?'':'S'})</span>`+n.folded.map(id=>button(id,'folded-item')).join('');
+  if(n.folded?.length)html+=`<span class="relation-label">FOLDED HERE (${n.folded.length} SPOT-CHECKED THEOREM${n.folded.length===1?'':'S'})</span>`+n.folded.map(id=>button(id,'folded-item')).join('');
   if(n.hideInRoots)html+=n.foldedInto.length?`<span class="relation-label">FOLDED INTO (${n.foldedInto.length})</span>`+n.foldedInto.map(id=>button(id,'host-item')).join(''):'<span class="relation-label">FOLDED INTO</span><span>no visible declaration · listed on its module’s shelf</span>';
   if(dependencies.length)html+='<span class="relation-label">USES ('+dependencies.length+')</span>'+dependencies.map(e=>button(e.from,e.bridge?'bridge':'',via(e))).join('');
   if(consumers.length)html+='<span class="relation-label">USED BY ('+consumers.length+')</span>'+consumers.map(e=>button(e.to,e.bridge?'bridge':'',via(e))).join('');
@@ -345,6 +349,7 @@ function step(delta){const n=nodeMap.get(selectedId);if(!n)return;const ids=step
 document.addEventListener('click',event=>{
   const sourceView=event.target.closest('button[data-source-view]');if(sourceView){document.body.dataset.sourceView=sourceView.dataset.sourceView;document.querySelectorAll('button[data-source-view]').forEach(b=>b.setAttribute('aria-pressed',b===sourceView));return;}
   const scopeButton=event.target.closest('button[data-scope]');if(scopeButton){setScope(scopeButton.dataset.scope);return;}
+  if(event.target.closest('[data-open-about]')){$('about-dialog').showModal();return;}
   const node=event.target.closest('[data-node]');if(node){selectNode(node.dataset.node);if(node.closest('#modules')&&mode==='atlas')locate();if(phoneLayout.matches&&!document.body.classList.contains('graph-expanded'))document.querySelector('.inspector').scrollIntoView({block:'start'});return;}
   const mod=event.target.closest('[data-module]');if(mod){selectModule(mod.dataset.module);return;}
   const status=event.target.closest('[data-status]');if(status){statusFilter=statusFilter===status.dataset.status?null:status.dataset.status;page=0;

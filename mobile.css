@@ -18,7 +18,8 @@
   .map-toolbar{padding:14px 13px 10px;flex-wrap:wrap;gap:12px}
   .crumb{min-width:0}.crumb h1{font-size:1rem}.crumb p{font-size:.75rem}.rank{display:none}
   .view-switch{display:flex;width:100%;margin:0}.view-switch button{flex:1;min-height:44px;font-size:.8125rem;padding:8px}
-  .toolbar-switches{flex-direction:column;align-items:stretch;width:100%;gap:8px}.role-key{display:none}
+  .toolbar-switches{flex-direction:row;align-items:stretch;width:100%;gap:6px}.toolbar-switches .view-switch{width:auto;flex:1 1 auto}.toolbar-switches .scope-switch{flex:0 0 auto}
+  .toolbar-switches .long,.legend-caveat .long,.role-key{display:none}.toolbar-switches .short,.legend-caveat .short{display:inline}.caveat-more{min-height:32px}
   .flag{font-size:.6875rem;margin:4px 6px 0 0}.legend-caveat .badge-key{font-size:10px}
   .legend-bar{padding:0 13px 10px;align-items:flex-start}.legend-bar #legend{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:5px 12px}
   .legend-bar .legend-button{min-height:51px;font-size:.75rem;gap:4px;padding:4px 0}.legend-description{font-size:11px;max-width:none}
