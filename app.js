@@ -7,7 +7,7 @@ const statusGuide = {
   broken: {short:'Open issue or proof obligation', detail:'Red: a known issue, an open proof obligation, or a renamed Lean declaration whose statement differs from Flocq’s. This does not necessarily mean the implementation is incorrect.'},
   progress: {short:'Review under way', detail:'Blue: this declaration is part of the current review effort recorded in this snapshot.'},
   matched: {short:'Counterpart found; awaiting review', detail:'Yellow: a likely Lean counterpart has been found, by name, source anchor or the port’s rename classification, but it has not been marked reviewed in this map.'},
-  unaddressed: {short:'No Lean counterpart yet', detail:'White: no Lean counterpart. The port’s classification lists these as missing; the note gives each one’s port plan.'},
+  unaddressed: {short:'No Lean counterpart yet', detail:'White: no Lean counterpart. The port’s classification lists most as missing, with a port plan in the note; the rest lost their counterpart after the classification was written, and the note says which.'},
   na: {short:'No Lean analogue by design', detail:'Grey: the port classifies it Rocq-only, with nothing to port: an SProp eliminator (Lean has no SProp) or a notation local to a Section (no compiled object). Only declarations with no Lean match by name were classified, so an eliminator or notation whose name a Lean declaration reuses keeps that match’s colour. Left out of progress ratios; in the roots view they are listed on each module’s strip.'}
 };
 const kinds = {prf:'theorem',def:'definition',abbrev:'notation / alias',ind:'inductive',constr:'constructor',rec:'record',proj:'projection',inst:'instance',scheme:'scheme'};
@@ -50,7 +50,10 @@ async function load(){
   $('edge-provenance').textContent=data.dpdCoverage?`Solid lines come from dpdgraph, run on the same pinned Flocq source with Rocq 9.1. ${data.dpdCoverage.mapped.toLocaleString()} of ${data.dpdCoverage.nodes.toLocaleString()} dependency-graph objects map to source declarations; the rest are generated or ambiguous. Arrows point from dependency to consumer. Dashed lines show source order.`:'Solid lines are approximate .glob references; dashed lines show source order.';
   const mapped=data.openDebts.filter(d=>d.source).length,c=data.review.classification;
   $('about-pins').innerHTML=`Flocq <code>${esc(data.flocqPin.slice(0,12))}</code> · Lean snapshot <code>${esc(data.leanCommit.slice(0,12))}</code>. Source links point to those revisions. Green (checked) evidence comes from the port’s review queue (${data.review.queueChecked} entries), its review ledger (${data.review.ledgerEntries}) and Claude spot checks (${data.review.spotChecks}); only Claude-spot-checked theorems fold in the roots view. The port’s proof-debt manifest lists ${data.openDebts.length} open obligation${data.openDebts.length===1?'':'s'}; ${mapped} ${mapped===1?'is':'are'} shown in red on the Flocq law${mapped===1?'':'s'} ${mapped===1?'it refines':'they refine'}.`
-    +(c?` The port’s classification of the ${c.entries} declarations with no named counterpart makes ${c.applied['renamed-match']} amber (renamed), ${c.applied['renamed-differs']} red (renamed, statement differs) and ${c.applied['not-applicable']} grey (Rocq-only), and keeps ${c.applied.missing} white (missing, with a port plan).`:'');
+    +(c?` The port’s classification of the ${c.entries} declarations with no named counterpart at FloatSpec ${esc(c.snapshot)} makes ${c.applied['renamed-match']} amber (renamed), ${c.applied['renamed-differs']} red (renamed, statement differs) and ${c.applied['not-applicable']} grey (Rocq-only), and keeps ${c.applied.missing} white (missing, with a port plan).`
+      +(c.superseded?.length?` ${c.superseded.length} ${c.superseded.length===1?'entry is':'entries are'} superseded by a direct match in this snapshot.`:'')
+      +(c.stale?.length?` ${c.stale.length} ${c.stale.length===1?'entry is':'entries are'} stale (the classified Lean name is gone) and shown white.`:'')
+      +(c.unclassifiedUnaddressed?.length?` ${c.unclassifiedUnaddressed.length} unclassified declaration${c.unclassifiedUnaddressed.length===1?' has':'s have'} lost ${c.unclassifiedUnaddressed.length===1?'its':'their'} counterpart since and ${c.unclassifiedUnaddressed.length===1?'is':'are'} shown white.`:''):'');
   renderNav();
   const hash=decodeURIComponent(location.hash.slice(1));
   const showcase=data.nodes.filter(n=>!n.hideInRoots).reduce((best,n)=>(n.folded?.length||0)>(best?.folded?.length||0)?n:best,null);
@@ -333,6 +336,9 @@ function flags(n){
   else if(n.classification==='renamed-match')html+='<span class="flag" title="Lean counterpart under another name, per the port’s 2026-09-22 classification">renamed counterpart</span>';
   else if(n.classification==='renamed-differs')html+='<span class="flag bad" title="The renamed Lean declaration states something different">statement differs</span>';
   else if(n.classification==='missing')html+=`<span class="flag" title="Missing from the Lean port; the note gives the port plan">missing${n.portDifficulty&&n.portDifficulty!=='n/a'?' · '+esc(n.portDifficulty):''}</span>`;
+  if(n.classificationSuperseded)html+=`<span class="flag" title="The port’s classification listed this declaration as ${esc(n.supersededClassification)}; a direct match in this snapshot replaces that entry">classification superseded</span>`;
+  else if(n.classificationStale)html+=`<span class="flag" title="The port’s ${esc(n.staleClassification)} entry names a Lean declaration this snapshot no longer has">classification stale</span>`;
+  else if(n.lostMatch!==undefined)html+='<span class="flag" title="Not in the port’s classification, which covers only declarations unmatched when it was written: its counterpart was removed or renamed since">counterpart lost</span>';
   if(n.hideInRoots)html+=rocqOnly(n)?'<span class="flag fold">hidden in roots view</span>':'<span class="flag fold">folded in roots view</span>';
   else if(n.role==='theorem'&&n.proven&&n.checked&&!n.spotChecked)html+='<span class="flag">awaiting Claude spot check</span>';
   return html;
@@ -366,6 +372,8 @@ async function renderInspector(){
   if(!c){
     $('lean-code').innerHTML=rocqOnly(n)?`<div class="source-empty"><strong>Not applicable to Lean · ${esc(n.naReason)}</strong>${n.naSection?`Declared inside Section <code>${esc(n.naSection)}</code>. `:''}${esc(naWhy[n.naReason]||'')}</div>`
       :n.classification==='missing'?'<div class="source-empty"><strong>Missing from the Lean port</strong>The port’s classification lists this declaration as missing. The note above gives the port plan.</div>'
+      :n.classificationStale?'<div class="source-empty"><strong>Classification stale</strong>The Lean declaration the port’s classification names is gone from this snapshot. The note above gives the entry.</div>'
+      :n.lostMatch!==undefined?'<div class="source-empty"><strong>Counterpart lost</strong>This declaration had a Lean match when the port’s classification was written, and this snapshot no longer has it. The note above names it.</div>'
       :'<div class="source-empty"><strong>No Lean match found</strong>This may be unported, renamed, or handled by different proof infrastructure. White means “not matched in this map,” not a confirmed missing implementation.</div>';
     $('lean-link').hidden=true;return;
   }

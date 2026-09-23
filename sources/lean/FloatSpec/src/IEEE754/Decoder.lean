@@ -33,7 +33,7 @@ value, preserving NaN payloads and signed zeros.
 
 open FloatSpec.Core.Defs
 
-noncomputable section
+section
 
 namespace Binary64
 
@@ -46,7 +46,7 @@ def ofBits (w : UInt64) : Binary754 53 1023 :=
 
 /-- Decode a `UInt64` bit pattern into `ℝ` via the IEEE-754 binary64 format.
 Non-finite bit patterns (infinities, NaNs) map to `0`. -/
-def toReal (w : UInt64) : ℝ := B2R (ofBits w)
+noncomputable def toReal (w : UInt64) : ℝ := B2R (ofBits w)
 
 /-! ### Constants -/
 
@@ -186,9 +186,8 @@ theorem ofBits_flipSign (w : UInt64) : ofBits (flipSign w) = negated w := by
 Combined with `ofBits_flipSign`, this shows that flipping the raw sign bit
 negates the decoded real value. -/
 theorem negated_toReal (w : UInt64) : B2R (negated w) = -toReal w := by
-  have hopp := B2R_Bopp_compat ((ofBits w).val) True.intro
   change FF2R 2 (Bopp (ofBits w).val) = -FF2R 2 (ofBits w).val
-  exact hopp
+  exact B2R_Bopp_compat (ofBits w).val
 
 end Binary64
 

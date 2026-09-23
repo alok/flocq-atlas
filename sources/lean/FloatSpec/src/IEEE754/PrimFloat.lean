@@ -4,13 +4,10 @@
 import FloatSpec.src.IEEE754.Binary
 import FloatSpec.src.IEEE754.BinarySingleNaN
 import FloatSpec.src.IEEE754.Bits
-import FloatSpec.src.SimprocWP
 import Mathlib.Data.Real.Basic
-import Std.Do.Triple
 
 open Real
 open Classical
-open Std.Do
 
 namespace FaithfulPrimFloat
 
@@ -123,7 +120,7 @@ theorem B2SF_valid (x : PrimBinaryFloat) :
 def Prim2B (x : PrimitiveFloat) : PrimBinaryFloat :=
   SF2B (Prim2SF x) (Prim2SF_valid x)
 
--- Flocq `PrimFloat.v:B2Prim`.
+@[flocq_source "src/IEEE754/PrimFloat.v" 33 "B2Prim"]
 def B2Prim (x : PrimBinaryFloat) : PrimitiveFloat :=
   SF2Prim (B2SF x)
 
@@ -1920,14 +1917,12 @@ private theorem binary_round_eq_overflow (mode : RoundingMode) (s : Bool) (M : N
 private theorem primMag_eq (x : ℝ) (k : Int) (h1 : (2 : ℝ) ^ (k - 1) ≤ |x|)
     (h2 : |x| < (2 : ℝ) ^ k) :
     FloatSpec.Core.Raux.mag 2 x = k := by
-  have h := FloatSpec.Core.Raux.mag_unique 2 x k (by norm_num) (by exact_mod_cast h1)
+  exact FloatSpec.Core.Raux.mag_unique 2 x k (by norm_num) (by exact_mod_cast h1)
     (by exact_mod_cast h2)
-  simpa [wp, PostCond.noThrow, pure] using h trivial
 
 private theorem primMag_le (x : ℝ) (k : Int) (hx : x ≠ 0) (h2 : |x| < (2 : ℝ) ^ k) :
     FloatSpec.Core.Raux.mag 2 x ≤ k := by
-  have h := FloatSpec.Core.Raux.mag_le_bpow 2 x k (by norm_num) hx (by exact_mod_cast h2)
-  simpa [wp, PostCond.noThrow, pure] using h trivial
+  exact FloatSpec.Core.Raux.mag_le_bpow 2 x k (by norm_num) hx (by exact_mod_cast h2)
 
 
 private abbrev primFexp : Int → Int := FLT_exp (3 - primEmax - primPrec) primPrec
@@ -2612,8 +2607,8 @@ the exponent.
 
 This replaces the former proof debt `native_frExp_equiv`, which stated the same
 equation for Lean's `Float.frExp`.  That constant is an `@[extern]` `opaque`, so
-the kernel cannot see its result and the old statement was unprovable without an
-axiom.  The present theorem is proved for `nativeFrExp`, a pure bit-level
+the kernel cannot see its result and the old statement was unprovable without
+an axiom.  The present theorem is proved for `nativeFrExp`, a pure bit-level
 function; `Float.frExp = nativeFrExp` is checked by execution
 (`scripts/fixtures/NativeFrexpAgreement.lean`), not by the kernel. -/
 theorem nativeFrExp_equiv (x : FaithfulPrimFloat.PrimitiveFloat)
