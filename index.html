@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="Explore Flocq declarations in dependency order and compare their Lean counterparts, side by side.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Flocq Atlas — a map of the Lean port</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121b2e'/%3E%3Cpath d='M9 8v16M9 16h14M23 8v16' stroke='%236ea4ff' stroke-width='2'/%3E%3Ccircle cx='9' cy='8' r='3' fill='%23fff'/%3E%3Ccircle cx='23' cy='16' r='3' fill='%233dd7a0'/%3E%3Ccircle cx='9' cy='24' r='3' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">ƒ</span><span>Flocq <strong>Atlas</strong></span><span class="beta">PORT EXPLORER</span></a>
+    <div class="top-right"><span id="snapshot">Source snapshot</span><button id="about" class="quiet">About this map <span aria-hidden="true">ⓘ</span></button></div>
+  </header>
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Source navigation">
+      <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a declaration…" aria-label="Find a declaration or module"><kbd>/</kbd></div>
+      <div class="sidebar-heading"><span id="nav-title">SOURCE MODULES</span><span id="module-total"></span></div>
+      <nav id="modules" aria-label="Modules in dependency order"></nav>
+      <div class="sidebar-foot"><span class="pin-icon">⌘</span><div><strong>Flocq 4.2.2 → Lean 4.34</strong><span id="source-pins"></span></div></div>
+    </aside>
+    <main>
+      <section class="map-section" aria-label="Declaration dependency graph">
+        <div class="map-toolbar">
+          <div class="crumb"><span id="module-rank" class="rank">02</span><div><h1 id="module-name">Core / Zaux</h1><p id="module-description">Loading source declarations…</p></div></div>
+          <div class="toolbar-switches"><div class="view-switch scope-switch" role="group" aria-label="Declarations shown"><button data-scope="roots" class="active" aria-pressed="true" title="Definitions plus every theorem not yet both proven and checked; proven, checked theorems fold into what they depend on">Definitions (roots)</button><button data-scope="all" aria-pressed="false" title="Every Flocq declaration">All declarations</button></div><div class="view-switch" aria-label="Graph view"><button id="atlas-view" class="active">Whole library</button><button id="declarations-view">This module</button><button id="modules-view">Imports</button></div></div>
+        </div>
+        <div class="legend-bar"><div id="legend"></div><button id="reset-filter" hidden>Clear filter</button><span class="role-key" aria-label="Shape key"><i class="def"></i>definition <i class="thm"></i>theorem <i class="unproved"></i>unproved</span><span class="edge-key"><i></i>reference <span id="bridge-key"><i class="bridge"></i>through folded</span> <i class="dashed"></i>source order</span></div>
+        <p class="legend-caveat" id="legend-caveat">Colors describe this snapshot’s review status, not correctness certificates. Click a color to filter.</p>
+        <div id="graph-wrap" class="graph-wrap"><svg id="graph" role="group" aria-label="Clickable graph of declarations"><text x="35" y="45">Loading the source map…</text></svg></div>
+        <div class="graph-footer"><span id="graph-caption">Each node is a source declaration.</span><div class="graph-controls"><select id="edge-mode" aria-label="Dependency edges"><option value="selected">Selected edges</option><option value="all">All edges</option><option value="none">No edges</option></select><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button><button id="locate" title="Zoom in on the selected declaration">Locate</button><button id="expand" aria-pressed="false">Expand ↗</button><span class="divider"></span><button id="page-prev" aria-label="Previous page of declarations">‹</button><span id="page-label"></span><button id="page-next" aria-label="Next page of declarations">›</button></div></div>
+      </section>
+      <div id="splitter" class="splitter" role="separator" tabindex="0" aria-label="Resize graph and source panels" aria-orientation="horizontal" aria-valuemin="30" aria-valuemax="72" aria-valuenow="50"></div>
+      <section class="inspector" aria-label="Side-by-side source comparison">
+        <div class="inspector-head"><div class="selected-heading"><span id="selected-status" class="status-badge progress">In progress</span><h2 id="selected-name">Choose a declaration</h2><span id="selected-kind"></span></div><div class="step-controls"><button id="previous" title="Previous declaration (Alt + ←)">← Previous</button><button id="next" title="Next declaration (Alt + →)">Next →</button></div></div>
+        <div id="review-note" class="review-note">Click a node to compare the two sources.</div>
+        <div class="source-switch" role="group" aria-label="Source display"><button data-source-view="coq" aria-pressed="true">Coq</button><button data-source-view="lean" aria-pressed="false">Lean</button><button data-source-view="both" aria-pressed="false">Both</button><button id="back-to-map">↑ Map</button></div>
+        <div class="source-grid">
+          <article class="source-pane"><header><div><span class="language coq">COQ</span><span id="coq-location"></span></div><a id="coq-link" target="_blank" rel="noreferrer">Pinned source ↗</a></header><div class="source-scroll" id="coq-code" tabindex="0" aria-label="Coq source"></div></article>
+          <article class="source-pane"><header><div><span class="language lean">LEAN</span><select id="candidate" aria-label="Choose Lean counterpart"></select></div><a id="lean-link" target="_blank" rel="noreferrer">Repository ↗</a></header><div class="source-scroll" id="lean-code" tabindex="0" aria-label="Lean source"></div></article>
+        </div>
+        <div id="relations" class="relations"></div>
+      </section>
+    </main>
+  </div>
+  <dialog id="about-dialog"><button id="close-about" class="dialog-close" aria-label="Close">×</button><span class="eyebrow">HOW TO READ THE ATLAS</span><h2>A map for exploration.<br>Not a proof certificate.</h2><p>Modules follow <code>coqdep -sort</code>. Within a module, declarations follow the positions recorded in Rocq’s compiled <code>.glob</code> files.</p><div id="about-stats"></div><p id="edge-provenance">Solid lines show declaration dependencies; dashed lines show source order.</p><p>A name match can be ambiguous. The code panes let you inspect the actual hypotheses and bodies yourself.</p><p><strong>Definitions (roots)</strong> is the default view. Definitions are roots; a theorem is folded away only when it is both proven in the Lean snapshot (its counterpart has no <code>sorry</code> and no proof-debt entry) and checked against pinned Flocq by the port’s review queue or ledger, or by a Claude spot check. Every other theorem — unproved, unmatched, red, or proven but unchecked — stays visible, and unproved theorems get a dashed red outline. A folded theorem’s dependency paths are compressed onto the nearest visible declarations it uses, which show a <strong>+n</strong> badge and list it in the inspector. <strong>All declarations</strong> shows the full graph.</p><p><strong>Green</strong> marks checked slices. <strong>Amber</strong> means a counterpart exists but is not marked reviewed here. <strong>White</strong> means no match was found, not necessarily that the port is missing. <strong>Blue</strong> is the current review slice. <strong>Red</strong> includes open proof obligations, which do not necessarily mean an algorithm is wrong.</p><p id="about-pins"></p><p>This is a read-only snapshot, built separately from the port. Source matching and excerpt boundaries are intentionally approximate. It does not update automatically.</p><footer>Flocq © its contributors · <a href="licenses/Flocq-LGPL.txt" target="_blank">LGPL</a><br>FloatSpec © its contributors · <a href="licenses/FloatSpec-LICENSE.txt" target="_blank">License</a><br>Graph generated with coq-dpdgraph · <a href="flocq.dpd" download>Download dependency data</a></footer></dialog>
+</body>
+</html>
